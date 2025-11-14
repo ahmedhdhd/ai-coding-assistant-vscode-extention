@@ -13,18 +13,20 @@ export function activate(context: vscode.ExtensionContext) {
     geminiService = new GeminiService();
     contextProvider = new ContextProvider(context);
     chatProvider = new ChatWebviewProvider(context.extensionUri, geminiService, contextProvider);
+    console.log('Chat provider created');
 
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            'geminiChat',
-            chatProvider,
-            {
-                webviewOptions: {
-                    retainContextWhenHidden: true
-                }
+    const disposable = vscode.window.registerWebviewViewProvider(
+        'geminiChat',
+        chatProvider,
+        {
+            webviewOptions: {
+                retainContextWhenHidden: true
             }
-        )
+        }
     );
+    console.log('Webview provider registered');
+    
+    context.subscriptions.push(disposable);
 
     // Register tree data provider
     vscode.window.registerTreeDataProvider('geminiContext', contextProvider);

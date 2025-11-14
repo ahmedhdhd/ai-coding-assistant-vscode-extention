@@ -7,7 +7,14 @@
     "vscode": "^1.74.0"
   },
   "categories": ["Other"],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:geminiChat",
+    "onCommand:geminiAssistant.openChat",
+    "onCommand:geminiAssistant.addContext",
+    "onCommand:geminiAssistant.clearContext",
+    "onCommand:geminiAssistant.acceptSuggestion",
+    "onCommand:geminiAssistant.declineSuggestion"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -85,7 +92,7 @@
         },
         "geminiAssistant.model": {
           "type": "string",
-          "default": "gemini-pro",
+"default": "gemini-2.0-flash",
           "description": "Gemini model to use",
           "enum": ["gemini-pro", "gemini-pro-vision", "gemini-2.0-flash"],
           "scope": "application"
