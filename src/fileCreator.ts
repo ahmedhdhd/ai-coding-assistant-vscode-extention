@@ -16,43 +16,92 @@ export class FileCreator {
     public extractFileCreationRequests(response: string): FileToCreate[] {
         const files: FileToCreate[] = [];
         
-        // Pattern 1: "create filename.ext:" followed by code block
-        const createPattern = /(?:create|save as|make a file)\s+[`'"]*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)[`'"]*:?\s*```([a-zA-Z]*)\n([\s\S]*?)```/gi;
+        console.log('=== Extracting files from response ===');
+        console.log('Response length:', response.length);
         
+        // Pattern 1: Explicit "create filename" or "save as filename"
+        const explicitPattern = /(?:create|save\s+(?:as|to)|make)\s+(?:a\s+file\s+)?(?:named\s+|called\s+)?[`'"]*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)[`'"]*[:\s]/gi;
         let match;
-        while ((match = createPattern.exec(response)) !== null) {
-            const filename = match[1].trim();
-            const language = match[2] || this.detectLanguageFromFilename(filename);
-            const content = match[3].trim();
-            
-            files.push({
-                filename,
-                content,
-                language
-            });
+        
+        const explicitMatches: string[] = [];
+        while ((match = explicitPattern.exec(response)) !== null) {
+            explicitMatches.push(match[1].trim());
+            console.log('Found explicit file mention:', match[1]);
         }
         
-        // Pattern 2: "filename.ext" followed by code block (more lenient)
-        if (files.length === 0) {
-            const filenamePattern = /[`'"]*([a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)[`'"]*:?\s*```([a-zA-Z]*)\n([\s\S]*?)```/gi;
+        // Pattern 2: Find all code blocks
+        const codeBlockPattern = /```([a-zA-Z]*)\n([\s\S]*?)```/g;
+        const codeBlocks: Array<{language: string, content: string, index: number}> = [];
+        
+        while ((match = codeBlockPattern.exec(response)) !== null) {
+            codeBlocks.push({
+                language: match[1] || '',
+                content: match[2].trim(),
+                index: match.index
+            });
+            console.log('Found code block:', match[1] || 'no-lang', 'at index', match.index);
+        }
+        
+        // Pattern 3: Find filenames near code blocks (within 200 chars before)
+        for (const block of codeBlocks) {
+            const beforeBlock = response.substring(Math.max(0, block.index - 200), block.index);
             
-            while ((match = filenamePattern.exec(response)) !== null) {
-                const filename = match[1].trim();
-                const language = match[2] || this.detectLanguageFromFilename(filename);
-                const content = match[3].trim();
-                
-                // Only add if it looks like a reasonable filename
-                if (this.isValidFilename(filename)) {
-                    files.push({
-                        filename,
-                        content,
-                        language
-                    });
+            // Look for filename patterns
+            const filenamePattern = /([a-zA-Z0-9_\-\/]+\.[a-zA-Z0-9]+)/g;
+            let filenameMatch;
+            let lastFilename = '';
+            
+            while ((filenameMatch = filenamePattern.exec(beforeBlock)) !== null) {
+                const potentialFilename = filenameMatch[1];
+                if (this.isValidFilename(potentialFilename)) {
+                    lastFilename = potentialFilename;
                 }
+            }
+            
+            // If we found a filename near this code block
+            if (lastFilename) {
+                console.log('Matched filename to code block:', lastFilename);
+                files.push({
+                    filename: lastFilename,
+                    content: block.content,
+                    language: block.language || this.detectLanguageFromFilename(lastFilename)
+                });
+            } else if (block.language) {
+                // No filename found, but we have a language - suggest a default name
+                const defaultName = this.getDefaultFilename(block.language);
+                console.log('No filename found, suggesting:', defaultName);
+                files.push({
+                    filename: defaultName,
+                    content: block.content,
+                    language: block.language
+                });
             }
         }
         
-        return files;
+        // Remove duplicates
+        const uniqueFiles = files.filter((file, index, self) =>
+            index === self.findIndex(f => f.filename === file.filename)
+        );
+        
+        console.log('Total files extracted:', uniqueFiles.length);
+        return uniqueFiles;
+    }
+    
+    private getDefaultFilename(language: string): string {
+        const defaults: { [key: string]: string } = {
+            'javascript': 'script.js',
+            'typescript': 'script.ts',
+            'html': 'index.html',
+            'css': 'styles.css',
+            'python': 'script.py',
+            'java': 'Main.java',
+            'cpp': 'main.cpp',
+            'c': 'main.c',
+            'json': 'data.json',
+            'jsx': 'Component.jsx',
+            'tsx': 'Component.tsx'
+        };
+        return defaults[language.toLowerCase()] || 'file.txt';
     }
     
     /**
